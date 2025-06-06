@@ -1,15 +1,16 @@
 import logging
 from pathlib import Path
+from abc import ABC, abstractmethod
 from langchain_community.document_loaders.pdf import PyPDFLoader
 from langchain_core.documents import Document
 from langchain_core.prompts import PromptTemplate
 from langchain_core.language_models import BaseChatModel
 from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI
-from abc import ABC, abstractmethod
 from langchain.chains.combine_documents.stuff import (
     create_stuff_documents_chain,
 )
+from pydantic import SecretStr
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,7 @@ class OpenAIService(BaseLLMService):
     def __init__(
         self,
         base_url: str,
-        api_key: str,
+        api_key: SecretStr,
         model: str,
         prompt_text: str,
         **kwargs,
@@ -112,9 +113,10 @@ class OpenAIService(BaseLLMService):
             prompt_text (str): Prompt to define what and
                                how to extract structured data
         """
+
         llm = ChatOpenAI(
             temperature=0,
-            model_name=model,
+            model=model,
             api_key=api_key,
             base_url=base_url,
         )
@@ -135,7 +137,12 @@ class LLMServiceFactory:
 
     @classmethod
     def createOpenAI(
-        cls, base_url: str, api_key: str, model: str, prompt: str, **kwargs
+        cls,
+        base_url: str,
+        api_key: SecretStr,
+        model: str,
+        prompt: str,
+        **kwargs,
     ) -> BaseLLMService:
         """creates an OpenAIService
 
