@@ -18,9 +18,20 @@ logger = logging.getLogger(__name__)
 
 class BaseLLMService(ABC):
 
-    def _serialize_pdf(
-        self, file_path: Path
-    ) -> str:
+    def __init__(
+        self, prompt_text: str, vector_store_path: Path = Path("vector_store")
+    ):
+        """Configure LLM server to revice a PDF and
+        return extracted data in JSON
+
+        Args:
+            prompt_text (str): Prompt to define what and
+                               how to extract structured data
+        """
+        self._prompt_text = prompt_text
+        self._vector_store_path = vector_store_path
+
+    def _llm_extract(self, file_path: Path) -> str:
         """LLM extracts relevant information
 
         Args:
@@ -29,17 +40,9 @@ class BaseLLMService(ABC):
             str: JSON in the defined format
         """
         docs = self._read_pdf(file_path)
-        llm = self._get_llm_chain()
-        return llm.invoke({"context": docs})
-
-    @abstractmethod
-    def _get_llm_chain(self) -> Runnable:
-        """Get initiate LLM Chain
-
-        Returns:
-            Runnable: Runnable object
-        """
-        pass
+        llm = self._get_llm()
+        llm_chain = self._create_chain(llm)
+        return llm_chain.invoke({"context": docs})
 
     def _read_pdf(self, file_path: Path) -> list[Document]:
         """Reads the PDF file to LLM format and splits into chunks
@@ -78,7 +81,7 @@ class BaseLLMService(ABC):
 
         return PromptTemplate.from_template(prompt)
 
-    def _create_chain(self, llm: BaseChatModel, prompt_text: str) -> Runnable:
+    def _create_chain(self, llm: BaseChatModel) -> Runnable:
         """_summary_
 
         Args:
@@ -94,8 +97,17 @@ class BaseLLMService(ABC):
         llm_json = llm.bind(response_format={"type": "json_object"})
 
         return create_stuff_documents_chain(
-            llm=llm_json, prompt=self._create_prompt(prompt_text)
+            llm=llm_json, prompt=self._create_prompt(self._prompt_text)
         )
+
+    @abstractmethod
+    def _get_llm(self) -> BaseChatModel:
+        """Get LLM Chain
+
+        Returns:
+            Runnable: Runnable object
+        """
+        pass
 
 
 class OpenAIService(BaseLLMService):
@@ -107,7 +119,7 @@ class OpenAIService(BaseLLMService):
         api_key: SecretStr,
         model: str,
         prompt_text: str,
-        **kwargs,
+        vector_store_path: Path = Path("vector_store"),
     ):
         """Configure OpenAI LLM server to revice a PDF and
         return extracted data in JSON
@@ -118,25 +130,30 @@ class OpenAIService(BaseLLMService):
             api_key (str): api_key to identify
             model (str): LLM model to use
             prompt_text (str): Prompt to define what and
-                               how to extract structured data
+                how to extract structured data
+            vector_store_path (Path, optional): Path to vector store.
+                Defaults to Path("vector_store").
         """
+        super().__init__(prompt_text, vector_store_path)
+        self._model: str = model
+        self._base_url: str = base_url
+        self._api_key: SecretStr = api_key
+        self._llm: BaseChatModel | None = None
 
-        llm = ChatOpenAI(
-            temperature=0,
-            model=model,
-            api_key=api_key,
-            base_url=base_url,
-        )
-
-        self._llm_chain = self._create_chain(llm, prompt_text)
-
-    def _get_llm_chain(self) -> Runnable:
+    def _get_llm(self) -> BaseChatModel:
         """Get initiate LLM Chain
 
         Returns:
             Runnable: Runnable object
         """
-        return self._llm_chain
+        if not self._llm:
+            self._llm = ChatOpenAI(
+                temperature=0,
+                model=self._model,
+                api_key=self._api_key,
+                base_url=self._base_url,
+            )
+        return self._llm
 
 
 class LLMServiceFactory:
