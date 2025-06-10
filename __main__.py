@@ -36,7 +36,7 @@ if __name__ == "__main__":
     # get files
     with open(out_file, "a") as result_file:
         for file_path in input_path.glob("*.pdf"):
-            response = llm_service.serialize_pdf(file_path)
+            response = llm_service._serialize_pdf(file_path)
             logger.info(f"File {file_path} done")
             result_file.write(f"{file_path}:\n")
             result_file.write(response)

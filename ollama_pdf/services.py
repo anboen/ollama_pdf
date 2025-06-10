@@ -10,6 +10,7 @@ from langchain_openai import ChatOpenAI
 from langchain.chains.combine_documents.stuff import (
     create_stuff_documents_chain,
 )
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pydantic import SecretStr
 
 logger = logging.getLogger(__name__)
@@ -17,12 +18,13 @@ logger = logging.getLogger(__name__)
 
 class BaseLLMService(ABC):
 
-    def serialize_pdf(self, file_path: Path) -> str:
+    def _serialize_pdf(
+        self, file_path: Path
+    ) -> str:
         """LLM extracts relevant information
 
         Args:
             file_path (Path): Path to PDF file
-
         Returns:
             str: JSON in the defined format
         """
@@ -40,7 +42,7 @@ class BaseLLMService(ABC):
         pass
 
     def _read_pdf(self, file_path: Path) -> list[Document]:
-        """Reads the PDF file to LLM format
+        """Reads the PDF file to LLM format and splits into chunks
 
         Args:
             file_path (Path): Path to PDF file
@@ -51,7 +53,12 @@ class BaseLLMService(ABC):
         logger.info(f"read {file_path}")
 
         loader = PyPDFLoader(file_path)
-        return loader.load()
+
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000, chunk_overlap=100
+        )
+
+        return loader.load_and_split(text_splitter=text_splitter)
 
     def _create_prompt(self, prompt_base: str) -> PromptTemplate:
         """Creates a PromptTemplate object for the LLM Chain
