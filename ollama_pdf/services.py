@@ -1,26 +1,28 @@
 import logging
 from pathlib import Path
 from abc import ABC, abstractmethod
-from langchain_community.document_loaders.pdf import PyPDFLoader
 from langchain_core.documents import Document
 from langchain_core.prompts import PromptTemplate
 from langchain_core.language_models import BaseChatModel
+from langchain_core.embeddings import Embeddings
 from langchain_core.runnables import Runnable
+from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_openai import ChatOpenAI
-from langchain.chains.combine_documents.stuff import (
-    create_stuff_documents_chain,
-)
+from langchain_ollama import OllamaEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain_community.document_loaders.pdf import PyPDFLoader
+from langchain.chains import RetrievalQA
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+
 from pydantic import SecretStr
+
 
 logger = logging.getLogger(__name__)
 
 
 class BaseLLMService(ABC):
 
-    def __init__(
-        self, prompt_text: str, vector_store_path: Path = Path("vector_store")
-    ):
+    def __init__(self, prompt_text: str):
         """Configure LLM server to revice a PDF and
         return extracted data in JSON
 
@@ -29,20 +31,22 @@ class BaseLLMService(ABC):
                                how to extract structured data
         """
         self._prompt_text = prompt_text
-        self._vector_store_path = vector_store_path
 
-    def _llm_extract(self, file_path: Path) -> str:
+    def extract_structure(self, file_path: Path) -> dict:
         """LLM extracts relevant information
 
         Args:
             file_path (Path): Path to PDF file
         Returns:
-            str: JSON in the defined format
+            dict: Response from LLM with extracted data
         """
         docs = self._read_pdf(file_path)
+
         llm = self._get_llm()
-        llm_chain = self._create_chain(llm)
-        return llm_chain.invoke({"context": docs})
+        vector_store = self._create_vector_store(docs)
+        llm_chain = self._create_chain(llm, vector_store)
+        repsonse: dict = llm_chain.invoke(self._prompt_text)
+        return repsonse
 
     def _read_pdf(self, file_path: Path) -> list[Document]:
         """Reads the PDF file to LLM format and splits into chunks
@@ -81,7 +85,25 @@ class BaseLLMService(ABC):
 
         return PromptTemplate.from_template(prompt)
 
-    def _create_chain(self, llm: BaseChatModel) -> Runnable:
+    def _create_vector_store(
+        self, docs: list[Document]
+    ) -> VectorStoreRetriever:
+        """Creates a vector store retriever from the documents
+        Args:
+            docs (list[str]): List of documents to be stored
+        Returns:
+            VectorStoreRetriever: Vector store retriever
+        """
+
+        vectordb = Chroma.from_documents(
+            documents=docs,
+            embedding=self._get_embeddings(),
+        )
+        return vectordb.as_retriever()
+
+    def _create_chain(
+        self, llm: BaseChatModel, vector_store: VectorStoreRetriever
+    ) -> Runnable:
         """_summary_
 
         Args:
@@ -95,9 +117,11 @@ class BaseLLMService(ABC):
 
         # bind the output to json format
         llm_json = llm.bind(response_format={"type": "json_object"})
-
-        return create_stuff_documents_chain(
-            llm=llm_json, prompt=self._create_prompt(self._prompt_text)
+        return RetrievalQA.from_chain_type(
+            llm=llm_json,
+            chain_type="stuff",
+            retriever=vector_store,
+            verbose=True,
         )
 
     @abstractmethod
@@ -106,6 +130,16 @@ class BaseLLMService(ABC):
 
         Returns:
             Runnable: Runnable object
+        """
+        pass
+
+    @abstractmethod
+    def _get_embeddings(self) -> Embeddings:
+        """Get Embedding specific to the LLM service
+        This method initializes the Embedding object
+
+        Returns:
+            Embeddings: Embedding
         """
         pass
 
@@ -119,7 +153,6 @@ class OpenAIService(BaseLLMService):
         api_key: SecretStr,
         model: str,
         prompt_text: str,
-        vector_store_path: Path = Path("vector_store"),
     ):
         """Configure OpenAI LLM server to revice a PDF and
         return extracted data in JSON
@@ -134,11 +167,12 @@ class OpenAIService(BaseLLMService):
             vector_store_path (Path, optional): Path to vector store.
                 Defaults to Path("vector_store").
         """
-        super().__init__(prompt_text, vector_store_path)
+        super().__init__(prompt_text)
         self._model: str = model
         self._base_url: str = base_url
         self._api_key: SecretStr = api_key
         self._llm: BaseChatModel | None = None
+        self._embeddings: Embeddings | None = None
 
     def _get_llm(self) -> BaseChatModel:
         """Get initiate LLM Chain
@@ -155,6 +189,21 @@ class OpenAIService(BaseLLMService):
             )
         return self._llm
 
+    def _get_embeddings(self) -> Embeddings:
+        """Get Embedding specific to OpenAI
+        This method initializes the OpenAIEmbeddings object
+
+        Returns:
+            Embeddings: Embedding
+        """
+        if not self._embeddings:
+            base_url = self._base_url.replace("/v1", "", 1)
+            self._embeddings = OllamaEmbeddings(
+                model=self._model,
+                base_url=base_url,
+            )
+        return self._embeddings
+
 
 class LLMServiceFactory:
     """Factory to create LLM Service"""
@@ -166,7 +215,6 @@ class LLMServiceFactory:
         api_key: SecretStr,
         model: str,
         prompt: str,
-        **kwargs,
     ) -> BaseLLMService:
         """creates an OpenAIService
 
@@ -183,5 +231,8 @@ class LLMServiceFactory:
         """
         logger.info("create OpenAI LLM Server")
         return OpenAIService(
-            base_url=base_url, api_key=api_key, model=model, prompt_text=prompt
+            base_url=base_url,
+            api_key=api_key,
+            model=model,
+            prompt_text=prompt,
         )

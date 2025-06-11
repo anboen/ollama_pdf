@@ -4,6 +4,7 @@ from pathlib import Path
 from datetime import datetime
 from ollama_pdf.services import LLMServiceFactory
 from ollama_pdf.utils import EnvConfigReader
+from pprint import pprint
 
 format = "[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s"
 logging.basicConfig(
@@ -36,8 +37,9 @@ if __name__ == "__main__":
     # get files
     with open(out_file, "a") as result_file:
         for file_path in input_path.glob("*.pdf"):
-            response = llm_service._llm_extract(file_path)
+            response = llm_service.extract_structure(file_path)
             logger.info(f"File {file_path} done")
             result_file.write(f"{file_path}:\n")
-            result_file.write(response)
+            result_file.write(response["result"])
             result_file.write("\n\n")
+            pprint(response["result"])
