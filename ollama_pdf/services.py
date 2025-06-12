@@ -14,7 +14,7 @@ from langchain_community.document_loaders.pdf import PyPDFLoader
 from langchain.chains import RetrievalQA
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pydantic import SecretStr
-from .model import FinalResponse
+from .model import InvoiceResponse
 
 
 logger = logging.getLogger(__name__)
@@ -116,7 +116,7 @@ class BaseLLMService(ABC):
 
         # bind the output to json format
         # llm_json = llm.bind(response_format={"type": "json_object"})
-        llm_json = llm.with_structured_output(FinalResponse)
+        llm_json = llm.with_structured_output(InvoiceResponse)
         return RetrievalQA.from_chain_type(
             llm=llm_json,
             chain_type="stuff",

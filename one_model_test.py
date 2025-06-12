@@ -45,6 +45,6 @@ if __name__ == "__main__":
             response = llm_service.extract_structure(file_path)
             logger.info(f"File {file_path} done")
             result_file.write(f"{file_path}:\n")
-            result_file.write(str(response['result'].response.model_dump()))
+            result_file.write(str(response['result'].model_dump()))
             result_file.write("\n\n")
-            pprint(response['result'].response.model_dump())
+            pprint(response['result'].model_dump())
