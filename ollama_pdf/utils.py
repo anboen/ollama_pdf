@@ -58,7 +58,6 @@ class BaseConfigReader(ABC):
     def api_key(self) -> SecretStr:
         """Returns the API key to use for the LLM Service"""
         return SecretStr(self._config["OPDF_API_KEY"])
-        
 
     @property
     def prompt(self) -> str:
