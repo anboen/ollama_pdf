@@ -83,3 +83,6 @@ class EnvConfigReader(BaseConfigReader):
         if "OPDF_PROMPT_FILE" in self._config:
             prompt_path = Path(self._config.get("OPDF_PROMPT_FILE", ""))
             self._load_prompt_file(prompt_path)
+
+        logger.info("Config loaded from environment variables")
+        logger.debug(f"Config: {self._config}")

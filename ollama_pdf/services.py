@@ -215,6 +215,7 @@ class OllamaService(BaseLLMService):
     def __init__(
         self,
         base_url: str,
+        api_key: SecretStr,
         model: str,
         embedding_model: str,
         prompt_text: str,
@@ -237,8 +238,24 @@ class OllamaService(BaseLLMService):
         self._model: str = model
         self._embbedding_model: str = embedding_model
         self._base_url: str = base_url
+        self._api_key: SecretStr = api_key
         self._llm: BaseChatModel | None = None
         self._embeddings: Embeddings | None = None
+
+    def _get_client_kwargs(self) -> dict | None:
+        """Get sync kwargs for the LLM and Embeddings
+
+        Returns:
+            dict | None: Sync kwargs for the LLM and Embeddings
+        """
+        if not self._api_key:
+            return {}
+
+        return {
+            "headers": {
+                "Authorization": f"Bearer {self._api_key.get_secret_value()}"
+            }
+        }
 
     def _get_llm(self) -> BaseChatModel:
         """Get initiate LLM Chain
@@ -246,11 +263,13 @@ class OllamaService(BaseLLMService):
         Returns:
             Runnable: Runnable object
         """
+        client_kwargs = self._get_client_kwargs()
         if not self._llm:
             self._llm = ChatOllama(
                 temperature=0,
                 model=self._model,
                 base_url=self._base_url,
+                client_kwargs=client_kwargs,
             )
         return self._llm
 
@@ -262,9 +281,11 @@ class OllamaService(BaseLLMService):
             Embeddings: Embedding
         """
         if not self._embeddings:
+            client_kwargs = self._get_client_kwargs()
             self._embeddings = OllamaEmbeddings(
                 model=self._embbedding_model,
                 base_url=self._base_url,
+                sync_client_kwargs=client_kwargs,
             )
         return self._embeddings
 
@@ -308,7 +329,11 @@ class LLMServiceFactory:
                 base_url, api_key, model, embedding_model, prompt
             )
         elif service == "Ollama":
-            return cls._create_Ollama(base_url, model, embedding_model, prompt)
+            if api_key is None:
+                raise ValueError("API key is required for Ollama service.")
+            return cls._create_Ollama(
+                base_url, model, api_key, embedding_model, prompt
+            )
         else:
             raise ValueError(f"Unknown service type: {service}")
 
@@ -349,6 +374,7 @@ class LLMServiceFactory:
         cls,
         base_url: str,
         model: str,
+        api_key: SecretStr,
         embedding_model: str,
         prompt: str,
     ) -> BaseLLMService:
@@ -369,6 +395,7 @@ class LLMServiceFactory:
         return OllamaService(
             base_url=base_url,
             model=model,
+            api_key=api_key,
             embedding_model=embedding_model,
             prompt_text=prompt,
         )
