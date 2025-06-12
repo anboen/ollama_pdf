@@ -30,8 +30,13 @@ if __name__ == "__main__":
     logger.info("read config")
     config = EnvConfigReader()
 
-    llm_service = LLMServiceFactory.createOpenAI(
-        config.base_url, config.api_key, config.model, config.prompt
+    llm_service = LLMServiceFactory.create_service(
+        config.service,
+        config.base_url,
+        config.api_key,
+        config.model,
+        config.embedding_model,
+        config.prompt,
     )
 
     # get files
@@ -40,6 +45,6 @@ if __name__ == "__main__":
             response = llm_service.extract_structure(file_path)
             logger.info(f"File {file_path} done")
             result_file.write(f"{file_path}:\n")
-            result_file.write(response["result"])
+            result_file.write(str(response['result'].response.model_dump()))
             result_file.write("\n\n")
-            pprint(response["result"])
+            pprint(response['result'].response.model_dump())

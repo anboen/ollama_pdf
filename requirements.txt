@@ -1,5 +1,7 @@
-langchain-community==0.3.24
-langchain_openai==0.3.19
-langchain-ollama==0.3.3
-pypdf==5.6.0
-chromadb==1.0.12
+langchain-community>=0.3.24
+langchain_openai>=0.3.19
+langchain-ollama>=0.3.3
+langchain_chroma>=0.2.4
+pydantic>=2.11.5
+pypdf>=5.6.0
+chromadb>=1.0.12
