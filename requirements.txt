@@ -5,3 +5,4 @@ langchain_chroma>=0.2.4
 pydantic>=2.11.5
 pypdf>=5.6.0
 chromadb>=1.0.12
+pandas>=2.3.0

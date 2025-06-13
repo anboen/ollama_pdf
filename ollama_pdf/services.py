@@ -32,7 +32,7 @@ class BaseLLMService(ABC):
         """
         self._prompt_text = prompt_text
 
-    def extract_structure(self, file_path: Path) -> dict:
+    def extract_structure(self, file_path: Path, **kwargs) -> dict:
         """LLM extracts relevant information
 
         Args:
@@ -40,20 +40,28 @@ class BaseLLMService(ABC):
         Returns:
             dict: Response from LLM with extracted data
         """
-        docs = self._read_pdf(file_path)
+        chunk_size = kwargs.get("chunk_size", 500)
+        chunk_overlap = kwargs.get("chunk_overlap", 50)
+        docs = self._read_pdf(
+            file_path, chunk_size=chunk_size, chunk_overlap=chunk_overlap
+        )
 
         llm = self._get_llm()
         vector_store = self._create_vector_store(docs)
         llm_chain = self._create_chain(llm, vector_store.as_retriever())
-        repsonse: dict = llm_chain.invoke(self._prompt_text)
+        response: dict = llm_chain.invoke(self._prompt_text)
         vector_store.delete_collection()
-        return repsonse
+        return response
 
-    def _read_pdf(self, file_path: Path) -> list[Document]:
+    def _read_pdf(
+        self, file_path: Path, chunk_size: int = 500, chunk_overlap: int = 50
+    ) -> list[Document]:
         """Reads the PDF file to LLM format and splits into chunks
 
         Args:
             file_path (Path): Path to PDF file
+            chunk_size (int): Size of each chunk
+            chunk_overlap (int): Overlap between chunks
 
         Returns:
             list[Document]: Pages of PDF
@@ -63,7 +71,7 @@ class BaseLLMService(ABC):
         loader = PyPDFLoader(file_path)
 
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000, chunk_overlap=100
+            chunk_size=chunk_size, chunk_overlap=chunk_overlap
         )
 
         return loader.load_and_split(text_splitter=text_splitter)
@@ -117,6 +125,8 @@ class BaseLLMService(ABC):
         # bind the output to json format
         # llm_json = llm.bind(response_format={"type": "json_object"})
         llm_json = llm.with_structured_output(InvoiceResponse)
+        # TODO: deprecatede
+        # https://python.langchain.com/docs/versions/migrating_chains/retrieval_qa/
         return RetrievalQA.from_chain_type(
             llm=llm_json,
             chain_type="stuff",
