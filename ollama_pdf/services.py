@@ -32,6 +32,9 @@ class BaseLLMService(ABC):
         """
         self._prompt_text = prompt_text
 
+    def load_model(self):
+        self._get_llm().invoke("")
+
     def extract_structure(self, file_path: Path, **kwargs) -> dict:
         """LLM extracts relevant information
 
@@ -200,7 +203,6 @@ class OpenAIService(BaseLLMService):
                 api_key=self._api_key,
                 base_url=self._base_url,
             )
-
         return self._llm
 
     def _get_embeddings(self) -> Embeddings:

@@ -116,15 +116,11 @@ if __name__ == "__main__":
     output_file = Path("./results") / f"results_mean_{today}.csv"
 
     models = [
-        "llama3.2:latest",
-        "gemma3:4b",
-        "gemma3:12b",
         "phi4:14b",
-        "phi3:latest",
         "Qwen3:4b",
         "Qwen3:14b",
     ]
-    chunk_sizes = [(1000, 100), (500, 50)]
+    chunk_sizes = [(800, 80), (750, 75), (850, 85)]
 
     # create folders if necessary
     input_path.mkdir(parents=True, exist_ok=True)
@@ -139,20 +135,22 @@ if __name__ == "__main__":
         "elapsed_time": [],
         "chunk_size": [],
     }
-    for chunk_size, overlay_size in chunk_sizes:
-        for model in models:
 
+    for model in models:
+        llm_service = LLMServiceFactory.create_service(
+            config.service,
+            config.base_url,
+            config.api_key,
+            model,
+            config.embedding_model,
+            config.prompt,
+        )
+        llm_service.load_model()
+
+        for chunk_size, overlay_size in chunk_sizes:
             file_name = model.replace(":", "_")
             logger.warning(
                 (f"Processing {model} " f"and {chunk_size}, {overlay_size}")
-            )
-            llm_service = LLMServiceFactory.create_service(
-                config.service,
-                config.base_url,
-                config.api_key,
-                model,
-                config.embedding_model,
-                config.prompt,
             )
 
             # get files
@@ -182,9 +180,7 @@ if __name__ == "__main__":
                 os.remove(output_file)
 
             result_df = pd.DataFrame(result_dict)
-            result_df.groupby(
-                ["model", "chunk_size", "embedding_model"]
-            ).mean().to_csv(
+            result_df.groupby(["model", "chunk_size"]).mean().to_csv(
                 output_file,
                 index=True,
                 sep=";",
